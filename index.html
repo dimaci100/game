@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Pixel Jump Pro - PC Version</title>
+    <style>
+        body { margin: 0; background: #0a0a12; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        #gameCanvas { border: 4px solid #2d2d44; background: linear-gradient(to bottom, #0f0f1b, #1a1a33); cursor: crosshair; }
+        #gameOverScreen { position: absolute; display: none; flex-direction: column; align-items: center; color: #fff; background: rgba(0,0,0,0.9); padding: 40px; border: 2px solid #555; z-index: 10; font-family: sans-serif; }
+        button { padding: 15px 30px; cursor: pointer; background: #ff4d4d; color: #fff; border: none; font-size: 20px; font-weight: bold; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <div id="gameOverScreen">
+        <h1 style="color: #ff4d4d; margin-top: 0;">GAME OVER</h1>
+        <button onclick="resetGame()">ИГРАТЬ СНОВА</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const goScreen = document.getElementById('gameOverScreen');
+        canvas.width = 400; canvas.height = 600;
+
+        let player, platforms, springs, enemies, score, isGameOver;
+        let keys = {};
+        let mouseX = null;
+
+        // --- УПРАВЛЕНИЕ ---
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+        canvas.addEventListener('mousedown', e => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+        });
+        canvas.addEventListener('mouseup', () => mouseX = null);
+
+        function drawHero(x, y) {
+            ctx.fillStyle = '#ff4d4d';
+            ctx.fillRect(x + 8, y, 14, 14); 
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x + 10, y + 3, 3, 3); ctx.fillRect(x + 16, y + 3, 3, 3);
+            ctx.fillStyle = '#2d2dff';
+            ctx.fillRect(x + 5, y + 14, 20, 12);
+            ctx.fillStyle = '#111';
+            ctx.fillRect(x + 7, y + 26, 6, 8); ctx.fillRect(x + 17, y + 26, 6, 8);
+        }
+
+        function init() {
+            isGameOver = false; score = 0; goScreen.style.display = 'none';
+            player = { x: 185, y: 500, vx: 0, vy: 0 };
+            platforms = [{ x: 170, y: 530, w: 60, h: 12 }];
+            springs = []; enemies = [];
+            for (let i = 0; i < 6; i++) {
+                platforms.push({ x: Math.random() * 330, y: i * 100, w: 60, h: 12 });
+            }
+        }
+
+        function resetGame() { init(); draw(); }
+
+        function update() {
+            if (isGameOver) return;
+
+            // Логика движения: клавиатура ИЛИ мышь
+            let dir = 0;
+            if (keys['ArrowLeft']) dir = -1;
+            else if (keys['ArrowRight']) dir = 1;
+            else if (mouseX !== null) dir = (mouseX < canvas.width / 2) ? -1 : 1;
+
+            player.vx = dir * 7;
+            player.x += player.vx;
+            player.y += player.vy;
+            player.vy += 0.45;
+
+            if (player.x > canvas.width) player.x = -20;
+            if (player.x < -20) player.x = canvas.width;
+            if (player.y > canvas.height) isGameOver = true;
+
+            if (player.y < 300) {
+                let diff = 300 - player.y;
+                player.y = 300;
+                platforms.forEach(p => p.y += diff);
+                springs.forEach(s => s.y += diff);
+                enemies.forEach(e => e.y += diff);
+                score += Math.floor(diff);
+            }
+
+            platforms.forEach((p, i) => {
+                if (player.vy > 0 && player.x + 22 > p.x && player.x < p.x + p.w &&
+                    player.y + 34 > p.y && player.y + 34 < p.y + p.h + player.vy) {
+                    player.vy = -12;
+                }
+                if (p.y > canvas.height) {
+                    platforms[i] = { x: Math.random() * 330, y: -20, w: 60, h: 12 };
+                    if (Math.random() > 0.8) springs.push({ x: platforms[i].x + 20, y: -30 });
+                    if (Math.random() > 0.7) enemies.push({ x: Math.random() * 350, y: -50, r: 12 });
+                }
+            });
+
+            springs.forEach((s, i) => {
+                if (player.vy > 0 && Math.abs(player.x - s.x) < 20 && Math.abs(player.y + 34 - s.y) < 20) {
+                    player.vy = -30;
+                    springs.splice(i, 1);
+                }
+            });
+
+            enemies.forEach(e => {
+                e.y += 3;
+                if (Math.abs(player.x - e.x) < 25 && Math.abs(player.y - e.y) < 25) isGameOver = true;
+            });
+        }
+
+        function draw() {
+            if (isGameOver) { goScreen.style.display = 'flex'; return; }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            platforms.forEach(p => {
+                let grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.h);
+                grad.addColorStop(0, '#558b2f'); grad.addColorStop(1, '#2e5a1b');
+                ctx.fillStyle = grad;
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+            });
+
+            ctx.fillStyle = '#ffeb3b';
+            springs.forEach(s => ctx.fillRect(s.x, s.y, 20, 10));
+
+            ctx.shadowBlur = 15; ctx.shadowColor = '#ff4d4d';
+            ctx.fillStyle = '#ff4d4d';
+            enemies.forEach(e => { ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, 7); ctx.fill(); });
+            ctx.shadowBlur = 0;
+
+            drawHero(player.x, player.y);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = "bold 24px Arial";
+            ctx.fillText('Score: ' + score, 20, 40);
+            
+            update();
+            requestAnimationFrame(draw);
+        }
+
+        init();
+        draw();
+    </script>
+</body>
+</html>
